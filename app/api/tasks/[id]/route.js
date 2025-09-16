@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { readDB, writeDB } from '@/lib/db';
+import { getTaskById, updateTask, deleteTask, initDB } from '@/lib/db';
 import { verifyToken } from '@/lib/auth-utils';
+import { ObjectId } from 'mongodb';
 
 // Helper function to set CORS headers
 function withCors(response, request) {
@@ -18,18 +19,15 @@ function withCors(response, request) {
 async function getAuthenticatedUser(request) {
   try {
     // First try to get user from middleware headers
-    const userHeader = request.headers.get('x-user');
-    if (userHeader) {
-      try {
-        return JSON.parse(userHeader);
-      } catch (error) {
-        console.error('Error parsing user header:', error);
-      }
+    const userId = request.headers.get('x-user-id');
+    const userEmail = request.headers.get('x-user-email');
+    
+    if (userId && userEmail) {
+      return { id: userId, email: userEmail };
     }
-
+    
     // Fallback to token verification
     const token = request.cookies.get('auth-token')?.value;
-    console.log('Auth token from cookies:', token ? 'exists' : 'missing');
     
     if (!token) {
       console.log('No auth token found in cookies');
@@ -37,22 +35,17 @@ async function getAuthenticatedUser(request) {
     }
     
     const decoded = await verifyToken(token);
-    console.log('Decoded token:', decoded);
     
-    if (!decoded) {
+    if (!decoded || !decoded.id) {
       console.log('Invalid or expired token');
       return null;
     }
     
-    const dbData = await readDB();
-    const user = dbData.users?.find(user => user.id === decoded.id);
-    
-    if (!user) {
-      console.log('User not found in database');
-      return null;
-    }
-    
-    return user;
+    // No second DB query needed; return merged data (just id/email for tasks)
+    return { 
+      id: decoded.id, 
+      email: decoded.email 
+    };
   } catch (error) {
     console.error('Error in getAuthenticatedUser:', error);
     return null;
@@ -68,10 +61,10 @@ export async function OPTIONS(request) {
 // Get single task
 export async function GET(request, { params }) {
   try {
-    const user = await getAuthenticatedUser(request);
+    await initDB();
     
+    const user = await getAuthenticatedUser(request);
     if (!user) {
-      console.log('No authenticated user found in GET request');
       const response = NextResponse.json(
         { error: 'Unauthorized - Authentication required' }, 
         { status: 401 }
@@ -79,21 +72,30 @@ export async function GET(request, { params }) {
       return withCors(response, request);
     }
 
-    const dbData = await readDB();
-    const task = dbData.tasks?.find(t => t.id === params.id && t.userId === user.id);
+    const { id } = params;
     
+    if (!ObjectId.isValid(id)) {
+      const response = NextResponse.json(
+        { error: 'Invalid task ID' },
+        { status: 400 }
+      );
+      return withCors(response, request);
+    }
+
+    const task = await getTaskById(id, user.id);
+
     if (!task) {
       const response = NextResponse.json(
-        { error: 'Task not found' }, 
+        { error: 'Task not found or access denied' },
         { status: 404 }
       );
       return withCors(response, request);
     }
-    
-    const response = NextResponse.json(task);
+
+    const response = NextResponse.json({ task });
     return withCors(response, request);
   } catch (error) {
-    console.error('Error fetching task:', error);
+    console.error('Error getting task:', error);
     const response = NextResponse.json(
       { error: 'Failed to fetch task' },
       { status: 500 }
@@ -105,10 +107,10 @@ export async function GET(request, { params }) {
 // Update task
 export async function PUT(request, { params }) {
   try {
-    const user = await getAuthenticatedUser(request);
+    await initDB();
     
+    const user = await getAuthenticatedUser(request);
     if (!user) {
-      console.log('No authenticated user found in PUT request');
       const response = NextResponse.json(
         { error: 'Unauthorized - Authentication required' }, 
         { status: 401 }
@@ -116,43 +118,39 @@ export async function PUT(request, { params }) {
       return withCors(response, request);
     }
 
-    console.log('Updating task:', params.id, 'for user:', user.email);
-
-    const body = await request.json();
-    const dbData = await readDB();
+    const { id } = params;
+    const updateData = await request.json();
     
-    // Find task index - only allow updating user's own tasks
-    const taskIndex = dbData.tasks?.findIndex(
-      task => task.id === params.id && task.userId === user.id
-    );
-
-    if (taskIndex === -1 || taskIndex === undefined) {
-      console.log('Task not found for update:', params.id);
+    if (!ObjectId.isValid(id)) {
       const response = NextResponse.json(
-        { error: 'Task not found' },
-        { status: 404 }
+        { error: 'Invalid task ID' },
+        { status: 400 }
       );
       return withCors(response, request);
     }
 
-    // Update task
-    const updatedTask = {
-      ...dbData.tasks[taskIndex],
-      ...body,
-      updatedAt: new Date().toISOString(),
-    };
-
-    dbData.tasks[taskIndex] = updatedTask;
-    await writeDB(dbData);
-
-    console.log('Task updated successfully:', params.id);
-
-    const response = NextResponse.json(updatedTask);
-    return withCors(response, request);
+    try {
+      const updatedTask = await updateTask(id, user.id, updateData);
+      
+      const response = NextResponse.json({ 
+        task: updatedTask,
+        message: 'Task updated successfully' 
+      });
+      return withCors(response, request);
+    } catch (error) {
+      if (error.message === 'Task not found or access denied') {
+        const response = NextResponse.json(
+          { error: error.message },
+          { status: 404 }
+        );
+        return withCors(response, request);
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error updating task:', error);
     const response = NextResponse.json(
-      { error: 'Failed to update task' },
+      { error: error.message || 'Failed to update task' },
       { status: 500 }
     );
     return withCors(response, request);
@@ -162,10 +160,10 @@ export async function PUT(request, { params }) {
 // Delete task
 export async function DELETE(request, { params }) {
   try {
-    const user = await getAuthenticatedUser(request);
+    await initDB();
     
+    const user = await getAuthenticatedUser(request);
     if (!user) {
-      console.log('No authenticated user found in DELETE request');
       const response = NextResponse.json(
         { error: 'Unauthorized - Authentication required' }, 
         { status: 401 }
@@ -173,37 +171,37 @@ export async function DELETE(request, { params }) {
       return withCors(response, request);
     }
 
-    console.log('Deleting task:', params.id, 'for user:', user.email);
-
-    const dbData = await readDB();
-    const initialLength = dbData.tasks?.length || 0;
+    const { id } = params;
     
-    // Remove task if it belongs to the user
-    const taskIndex = dbData.tasks?.findIndex(
-      task => task.id === params.id && task.userId === user.id
-    );
-
-    if (taskIndex === -1 || taskIndex === undefined) {
-      console.log('Task not found for deletion:', params.id);
+    if (!ObjectId.isValid(id)) {
       const response = NextResponse.json(
-        { error: 'Task not found' },
-        { status: 404 }
+        { error: 'Invalid task ID' },
+        { status: 400 }
       );
       return withCors(response, request);
     }
 
-    // Remove task
-    dbData.tasks.splice(taskIndex, 1);
-    await writeDB(dbData);
-
-    console.log('Task deleted successfully:', params.id);
-
-    const response = NextResponse.json({ success: true });
-    return withCors(response, request);
+    try {
+      await deleteTask(id, user.id);
+      
+      const response = NextResponse.json({ 
+        message: 'Task deleted successfully' 
+      });
+      return withCors(response, request);
+    } catch (error) {
+      if (error.message === 'Task not found or access denied') {
+        const response = NextResponse.json(
+          { error: error.message },
+          { status: 404 }
+        );
+        return withCors(response, request);
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error deleting task:', error);
     const response = NextResponse.json(
-      { error: 'Failed to delete task' },
+      { error: error.message || 'Failed to delete task' },
       { status: 500 }
     );
     return withCors(response, request);

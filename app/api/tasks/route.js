@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { readDB, writeDB } from '@/lib/db';
+import { initDB } from '@/lib/db';
+import Task from '@/models/Task';
 import { verifyToken } from '@/lib/auth-utils';
-import { nanoid } from 'nanoid';
 
 // Helper function to set CORS headers
 function withCors(response, request) {
@@ -9,7 +9,7 @@ function withCors(response, request) {
   
   response.headers.set('Access-Control-Allow-Origin', origin);
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-id, x-user-email');
   response.headers.set('Access-Control-Allow-Credentials', 'true');
   
   return response;
@@ -19,18 +19,15 @@ function withCors(response, request) {
 async function getAuthenticatedUser(request) {
   try {
     // First try to get user from middleware headers
-    const userHeader = request.headers.get('x-user');
-    if (userHeader) {
-      try {
-        return JSON.parse(userHeader);
-      } catch (error) {
-        console.error('Error parsing user header:', error);
-      }
+    const userId = request.headers.get('x-user-id');
+    const userEmail = request.headers.get('x-user-email');
+    
+    if (userId && userEmail) {
+      return { id: userId, email: userEmail };
     }
-
+    
     // Fallback to token verification
     const token = request.cookies.get('auth-token')?.value;
-    console.log('Auth token from cookies:', token ? 'exists' : 'missing');
     
     if (!token) {
       console.log('No auth token found in cookies');
@@ -38,22 +35,16 @@ async function getAuthenticatedUser(request) {
     }
     
     const decoded = await verifyToken(token);
-    console.log('Decoded token:', decoded);
     
-    if (!decoded) {
+    if (!decoded || !decoded.id) {
       console.log('Invalid or expired token');
       return null;
     }
     
-    const dbData = await readDB();
-    const user = dbData.users?.find(user => user.id === decoded.id);
-    
-    if (!user) {
-      console.log('User not found in database');
-      return null;
-    }
-    
-    return user;
+    return { 
+      id: decoded.id, 
+      email: decoded.email 
+    };
   } catch (error) {
     console.error('Error in getAuthenticatedUser:', error);
     return null;
@@ -69,6 +60,8 @@ export async function OPTIONS(request) {
 // Get all tasks for the current user
 export async function GET(request) {
   try {
+    await initDB();
+    
     const user = await getAuthenticatedUser(request);
     
     if (!user) {
@@ -83,58 +76,43 @@ export async function GET(request) {
     console.log('Fetching tasks for user:', user.email || 'unknown');
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
-    const category = searchParams.get('category');
-    const priority = searchParams.get('priority');
-    const sortBy = searchParams.get('sortBy') || 'dueDate';
-    const order = searchParams.get('order') || 'asc';
+    const filters = {
+      status: searchParams.get('status'),
+      priority: searchParams.get('priority'),
+      category: searchParams.get('category'),
+      search: searchParams.get('search')
+    };
 
-    const dbData = await readDB();
-    if (!dbData || !dbData.tasks) {
-      console.log('No tasks found in database');
-      const response = NextResponse.json([], { status: 200 });
-      return withCors(response, request);
-    }
+    // Get tasks with filters using the Task model
+    const tasks = await Task.findByUser(user.id, filters);
     
-    // Filter tasks by current user
-    let tasks = dbData.tasks.filter(task => task.userId === user.id);
-    console.log(`Found ${tasks.length} tasks for user ${user.email}`);
+    // Transform tasks to include proper ID field and ensure consistency
+    const transformedTasks = tasks.map(task => ({
+      id: task._id.toString(),
+      _id: task._id.toString(),
+      title: task.title,
+      description: task.description || '',
+      status: task.status,
+      priority: task.priority,
+      category: task.category || '',
+      tags: task.tags || [],
+      dueDate: task.dueDate,
+      completedAt: task.completedAt,
+      timeSpent: task.timeSpent || 0,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      userId: task.userId.toString()
+    }));
 
-    // Apply filters
-    if (status) {
-      tasks = tasks.filter(task => task.status === status);
-    }
-    if (category) {
-      tasks = tasks.filter(task => task.category === category);
-    }
-    if (priority) {
-      tasks = tasks.filter(task => task.priority === priority);
-    }
-
-    // Sort tasks
-    tasks.sort((a, b) => {
-      if (sortBy === 'dueDate') {
-        return order === 'asc' 
-          ? new Date(a.dueDate) - new Date(b.dueDate)
-          : new Date(b.dueDate) - new Date(a.dueDate);
-      } else if (sortBy === 'priority') {
-        const priorityOrder = { high: 3, medium: 2, low: 1 };
-        return order === 'asc'
-          ? priorityOrder[a.priority] - priorityOrder[b.priority]
-          : priorityOrder[b.priority] - priorityOrder[a.priority];
-      } else {
-        return order === 'asc'
-          ? a[sortBy]?.localeCompare(b[sortBy])
-          : b[sortBy]?.localeCompare(a[sortBy]);
-      }
-    });
-
-    const response = NextResponse.json(tasks);
+    const response = NextResponse.json(transformedTasks);
     return withCors(response, request);
   } catch (error) {
-    console.error('Error fetching tasks:', error);
+    console.error('Error in GET /api/tasks:', error);
     const response = NextResponse.json(
-      { error: 'Failed to fetch tasks' },
+      { 
+        error: 'Failed to fetch tasks',
+        details: error.message 
+      },
       { status: 500 }
     );
     return withCors(response, request);
@@ -144,62 +122,95 @@ export async function GET(request) {
 // Create new task
 export async function POST(request) {
   try {
-    const user = await getAuthenticatedUser(request);
+    console.log('POST /api/tasks - Request received');
+    await initDB();
     
+    const user = await getAuthenticatedUser(request);
     if (!user) {
-      console.log('No authenticated user found in POST request');
+      console.log('POST /api/tasks - Unauthorized: No user found');
       const response = NextResponse.json(
-        { error: 'Unauthorized - Authentication required' }, 
+        { 
+          error: 'Unauthorized - Authentication required'
+        },
         { status: 401 }
       );
       return withCors(response, request);
     }
+
+    const taskData = await request.json();
+    console.log('POST /api/tasks - Task data:', taskData);
     
-    console.log('Creating task for user:', user.email || 'unknown');
-
-    const body = await request.json();
-    console.log('Request body:', body);
-
-    if (!body.title) {
+    // Validate required fields
+    if (!taskData.title || !taskData.title.trim()) {
+      console.log('POST /api/tasks - Validation error: Title is required');
       const response = NextResponse.json(
-        { error: 'Title is required' }, 
+        { 
+          error: 'Title is required'
+        },
         { status: 400 }
       );
       return withCors(response, request);
     }
 
-    const dbData = await readDB();
+    // Create new task using the Task model
+    const newTask = new Task({
+      title: taskData.title.trim(),
+      description: taskData.description?.trim() || '',
+      status: taskData.status || 'pending',
+      priority: taskData.priority || 'medium',
+      category: taskData.category?.trim() || '',
+      tags: Array.isArray(taskData.tags) ? taskData.tags.filter(tag => tag.trim()) : [],
+      dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+      timeSpent: taskData.timeSpent || 0,
+      userId: user.id
+    });
 
-    const newTask = {
-      id: nanoid(),
-      userId: user.id,
-      title: body.title,
-      description: body.description || '',
-      category: body.category || 'Other',
-      dueDate: body.dueDate || null,
-      priority: ['low', 'medium', 'high'].includes(body.priority)
-        ? body.priority
-        : 'medium',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    await newTask.save();
+
+    // Transform the saved task for response
+    const responseTask = {
+      id: newTask._id.toString(),
+      _id: newTask._id.toString(),
+      title: newTask.title,
+      description: newTask.description,
+      status: newTask.status,
+      priority: newTask.priority,
+      category: newTask.category,
+      tags: newTask.tags,
+      dueDate: newTask.dueDate,
+      completedAt: newTask.completedAt,
+      timeSpent: newTask.timeSpent,
+      createdAt: newTask.createdAt,
+      updatedAt: newTask.updatedAt,
+      userId: newTask.userId.toString()
     };
 
-    // Add to tasks array
-    dbData.tasks = dbData.tasks || [];
-    dbData.tasks.push(newTask);
+    console.log(`POST /api/tasks - Task created with ID: ${newTask._id}`);
     
-    // Write back to database
-    await writeDB(dbData);
+    const response = NextResponse.json(responseTask, { status: 201 });
     
-    console.log('Task created successfully:', newTask.id);
-
-    const response = NextResponse.json(newTask, { status: 201 });
     return withCors(response, request);
   } catch (error) {
-    console.error('Error creating task:', error);
+    console.error('Error in POST /api/tasks:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      const response = NextResponse.json(
+        { 
+          error: 'Validation failed',
+          details: validationErrors
+        },
+        { status: 400 }
+      );
+      return withCors(response, request);
+    }
+    
     const response = NextResponse.json(
-      { error: 'Failed to create task' }, 
+      { 
+        error: 'Failed to create task',
+        details: error.message 
+      },
       { status: 500 }
     );
     return withCors(response, request);

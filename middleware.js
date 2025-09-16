@@ -1,179 +1,162 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from './lib/auth-utils';
-import { readDB } from './lib/db';
+import { initDB } from '@/lib/db';
+import User from '@/models/User'; // This was missing!
 
-const protectedRoutes = ['/dashboard', '/tasks'];
-const publicRoutes = ['/login', '/register', '/api/auth/login', '/api/auth/register'];
-const apiRoutes = ['/api'];
+// List of paths that should be accessible without authentication
+const publicPaths = [
+  '/login',
+  '/register',
+  '/api/auth/login',
+  '/api/auth/register'
+];
 
-// Helper function to set CORS headers
-function setCorsHeaders(response, request) {
-  const origin = request.headers.get('origin') || '*';
-  response.headers.set('Access-Control-Allow-Credentials', 'true');
-  response.headers.set('Access-Control-Allow-Origin', origin);
-  response.headers.set('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  response.headers.set('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-user');
-  response.headers.set('Access-Control-Expose-Headers', 'x-user');
-  return response;
-}
-
-async function middleware(request) {
-  const { pathname, origin } = request.nextUrl;
-  
-  // Handle root path redirection immediately
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL('/login', origin));
+export async function middleware(request) {
+  try {
+    await initDB();
+  } catch (error) {
+    console.error('Database initialization failed:', error);
   }
+  
+  const { pathname } = request.nextUrl;
   const token = request.cookies.get('auth-token')?.value;
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
-  const isApiRoute = apiRoutes.some(route => pathname.startsWith(route));
+  const origin = request.headers.get('origin') || '*';
 
-  // Handle CORS preflight requests
+  // Handle preflight requests
   if (request.method === 'OPTIONS') {
     const response = new NextResponse(null, { status: 200 });
-    return setCorsHeaders(response, request);
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-id, x-user-email');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set('Access-Control-Max-Age', '86400');
+    return response;
   }
 
-  // Handle API routes
-  if (isApiRoute) {
-    // For public API routes, just set CORS headers and continue
-    if (isPublicRoute) {
-      const response = NextResponse.next();
-      return setCorsHeaders(response, request);
-    }
-
-    // For protected API routes, verify the token
-    if (pathname.startsWith('/api/tasks')) {
-      console.log('Processing API request to:', pathname);
-      console.log('Auth token exists:', !!token);
-      
-      if (!token) {
-        console.log('No token found for protected API route');
-        const response = NextResponse.json(
-          { error: 'Authentication required' },
-          { status: 401 }
-        );
-        return setCorsHeaders(response, request);
-      }
-      
+  // Allow public paths
+  if (publicPaths.some(path => pathname.startsWith(path))) {
+    // If user is already logged in and tries to access login/register, redirect to dashboard
+    if (token && (pathname === '/login' || pathname === '/register')) {
       try {
-        console.log('Verifying token:', token.substring(0, 20) + '...');
         const decoded = await verifyToken(token);
-        
-        if (!decoded) {
-          console.log('Token verification failed - invalid token');
-          const response = NextResponse.json(
-            { error: 'Invalid or expired token' },
-            { status: 401 }
-          );
-          return setCorsHeaders(response, request);
+        if (decoded) {
+          return NextResponse.redirect(new URL('/dashboard', request.url));
         }
-        
-        console.log('Token verified for user:', decoded.email);
-        
-        // Get the latest user data from the database
-        const db = await readDB();
-        const user = db.users.find(u => u.id === decoded.id);
-        
-        if (!user) {
-          console.log('User not found in database');
-          const response = NextResponse.json(
-            { error: 'User not found' },
-            { status: 404 }
-          );
-          return setCorsHeaders(response, request);
-        }
-        
-        console.log('User authenticated:', user.email);
-        
-        // Create a new request with the user info in headers
-        const requestHeaders = new Headers(request.headers);
-        requestHeaders.set('x-user', JSON.stringify(user));
-        
-        // Create a response with the modified headers
-        const response = NextResponse.next({
-          request: {
-            headers: requestHeaders,
-          },
-        });
-        
-        // Set user info in response headers for debugging
-        response.headers.set('x-user-id', user.id);
-        response.headers.set('x-user-email', user.email);
-        
-        return setCorsHeaders(response, request);
-        
       } catch (error) {
-        console.error('Error verifying API token:', error);
-        const response = NextResponse.json(
-          { error: 'Invalid token' },
-          { status: 401 }
-        );
-        return setCorsHeaders(response, request);
+        // Token invalid, allow access to login/register
+        console.log('Invalid token on public path, allowing access');
       }
     }
     
-    // For other API routes, just continue with CORS
     const response = NextResponse.next();
-    return setCorsHeaders(response, request);
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    return response;
   }
 
-  // Handle protected routes
-  if (isProtectedRoute) {
-    if (!token) {
-      const loginUrl = new URL('/login', origin);
-      loginUrl.searchParams.set('from', pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    try {
-      const user = await verifyToken(token);
-      if (!user) {
-        const response = NextResponse.redirect(new URL('/login', origin));
-        response.cookies.delete('auth-token');
-        return response;
-      }
-    } catch (error) {
-      console.error('Error verifying token:', error);
-      const response = NextResponse.redirect(new URL('/login', origin));
-      response.cookies.delete('auth-token');
-      return response;
-    }
+  // Redirect root to login
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Redirect authenticated users away from public routes
-  if (isPublicRoute && token) {
-    try {
-      const user = await verifyToken(token);
-      if (user) {
-        return NextResponse.redirect(new URL('/dashboard', origin));
-      }
-    } catch (error) {
-      console.error('Error verifying token:', error);
+  // Handle API routes
+  if (pathname.startsWith('/api/')) {
+    // Skip auth for public API routes
+    if (publicPaths.some(path => pathname.startsWith(path))) {
       const response = NextResponse.next();
+      response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      return response;
+    }
+
+    // Require auth for protected API routes
+    if (!token) {
+      const response = NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+      response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      return response;
+    }
+
+    try {
+      const decoded = await verifyToken(token);
+      if (!decoded) {
+        console.log('Token verification failed: No decoded token');
+        throw new Error('Invalid or expired token');
+      }
+
+      // Check if user exists in database
+      const user = await User.findById(decoded.id);
+      if (!user) {
+        console.log('User not found for ID:', decoded.id);
+        throw new Error('User not found');
+      }
+
+      // Add user info to request headers
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set('x-user-id', user._id.toString());
+      requestHeaders.set('x-user-email', user.email);
+
+      const response = NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+      
+      // Set CORS headers
+      response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      
+      return response;
+    } catch (error) {
+      console.error('Token verification failed:', error.message);
+      
+      // Clear invalid token and return error
+      const response = NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+      response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
       response.cookies.delete('auth-token');
       return response;
     }
   }
 
-  const response = NextResponse.next();
-  
-  // Add CORS headers to all responses
-  response.headers.set('Access-Control-Allow-Credentials', 'true');
-  response.headers.set('Access-Control-Allow-Origin', request.headers.get('origin') || '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  response.headers.set('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
-  
-  return response;
+  // Handle page routes (non-API routes)
+  if (!token) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  try {
+    const decoded = await verifyToken(token);
+    if (!decoded) {
+      throw new Error('Invalid token');
+    }
+
+    // Check if user exists
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const response = NextResponse.next();
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    return response;
+  } catch (error) {
+    console.error('Page route auth failed:', error.message);
+    const response = NextResponse.redirect(new URL('/login', request.url));
+    response.cookies.delete('auth-token');
+    return response;
+  }
 }
 
-// Use Node.js runtime instead of Edge Runtime
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
   runtime: 'nodejs',
 };
-
-export default middleware;

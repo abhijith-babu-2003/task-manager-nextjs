@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -12,20 +13,15 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { user, register } = useAuth();
 
+  // Redirect if already logged in
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const res = await fetch('/api/auth/me');
-        if (res.ok) {
-          router.push('/dashboard');
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-      }
-    };
-    checkAuth();
-  }, [router]);
+    if (user) {
+      console.log('Register page: User already authenticated, redirecting to dashboard');
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -56,34 +52,52 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
+    
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ name, email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
+      const result = await register(name, email, password);
+      
+      if (result.success) {
+        console.log('Registration successful:', result);
+        toast.success('Account created successfully! Welcome!');
+        
+        // Small delay to show the success message, then redirect
+        setTimeout(() => {
+          router.replace('/login');
+        }, 1000);
+      } else {
+        console.error('Registration failed:', result.error);
+        toast.error(result.error || 'Registration failed. Please try again.');
+        setErrors({ general: result.error });
       }
-
-      toast.success('Account created successfully!');
-      router.push('/login');
-      router.refresh();
     } catch (err) {
-      toast.error(err.message || 'Registration failed. Please try again.');
+      console.error('Registration error:', err);
+      const errorMessage = err.message || 'Registration failed. Please try again.';
+      toast.error(errorMessage);
+      setErrors({ general: errorMessage });
     } finally {
       setLoading(false);
     }
   };
 
+  // Don't render if user is already logged in
+  if (user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-md border border-gray-200">
         <h1 className="text-3xl font-bold text-center text-gray-900 mb-6">Create Account</h1>
+
+        {errors.general && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {errors.general}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -98,6 +112,7 @@ export default function RegisterPage() {
                 errors.name ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter your full name"
+              disabled={loading}
             />
             {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name}</p>}
           </div>
@@ -114,6 +129,7 @@ export default function RegisterPage() {
                 errors.email ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter your email"
+              disabled={loading}
             />
             {errors.email && <p className="text-sm text-red-600 mt-1">{errors.email}</p>}
           </div>
@@ -130,6 +146,7 @@ export default function RegisterPage() {
                 errors.password ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter your password"
+              disabled={loading}
             />
             {errors.password && <p className="text-sm text-red-600 mt-1">{errors.password}</p>}
           </div>

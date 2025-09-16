@@ -13,17 +13,34 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        console.log('AuthContext: Checking authentication...');
+        const res = await fetch('/api/auth/me', { 
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        console.log('AuthContext: Auth check response status:', res.status);
+        
         if (res.ok) {
-          const userData = await res.json();
-          setUser(userData);
-          console.log('AuthContext: User state updated:', userData);
+          const data = await res.json();
+          console.log('AuthContext: Auth check response data:', data);
+          
+          if (data.user) {
+            setUser(data.user);
+            console.log('AuthContext: User authenticated:', data.user.email);
+          } else {
+            setUser(null);
+            console.log('AuthContext: No user in response');
+          }
         } else {
+          const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+          console.log('AuthContext: Auth check failed:', res.status, errorData);
           setUser(null);
-          router.push('/login');
         }
       } catch (error) {
-        console.error('Auth check failed:', error);
+        console.error('AuthContext: Auth check error:', error);
         setUser(null);
       } finally {
         setLoading(false);
@@ -31,7 +48,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkAuth();
-  }, [router]);
+  }, []);
 
   const login = async (email, password) => {
     try {
@@ -43,33 +60,16 @@ export const AuthProvider = ({ children }) => {
           'Accept': 'application/json'
         },
         body: JSON.stringify({ email, password }),
-        credentials: 'include' // Important for cookies to be sent/received
+        credentials: 'include'
       });
 
       const data = await res.json();
       console.log('AuthContext: Login response:', { status: res.status, data });
       
-      if (res.ok) {
+      if (res.ok && data.success && data.user) {
         console.log('AuthContext: Login successful, setting user:', data.user);
-        
-        // Update the user state with the response data
         setUser(data.user);
         
-        // Force a state update to ensure re-render
-        setLoading(false);
-        
-        // Trigger a check for the auth state to ensure consistency
-        const authCheck = await fetch('/api/auth/me', { 
-          credentials: 'include' 
-        });
-        
-        if (authCheck.ok) {
-          const userData = await authCheck.json();
-          console.log('AuthContext: Verified user session:', userData);
-          setUser(userData);
-        }
-        
-        // Return the full user data for the login page
         return { 
           success: true,
           user: data.user
@@ -91,14 +91,63 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-    setUser(null);
-    router.push('/login');
+    try {
+      await fetch('/api/auth/logout', { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      setUser(null);
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still clear user state even if request fails
+      setUser(null);
+      router.push('/login');
+    }
   };
 
-  // Add debug logging for auth state changes
-  console.log('AuthContext: Current user state:', { user, loading });
-  
+  const register = async (name, email, password) => {
+    try {
+      console.log('AuthContext: Attempting registration for:', email);
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ name, email, password }),
+        credentials: 'include'
+      });
+
+      const data = await res.json();
+      console.log('AuthContext: Registration response:', { status: res.status, data });
+      
+      if (res.ok && data.user) {
+        console.log('AuthContext: Registration successful, setting user:', data.user);
+        // Set user but don't redirect automatically
+        setUser(data.user);
+        
+        return { 
+          success: true,
+          user: data.user,
+          message: data.message || 'Registration successful'
+        };
+      }
+      
+      console.error('Registration failed:', data.error || 'Unknown error');
+      return { 
+        success: false, 
+        error: data.error || 'Registration failed. Please try again.' 
+      };
+    } catch (error) {
+      console.error('Registration error:', error);
+      return { 
+        success: false, 
+        error: 'Network error. Please check your connection and try again.' 
+      };
+    }
+  };
+
   // Add debug logging for auth state changes
   console.log('AuthContext: Current user state:', { user, loading });
   
@@ -108,7 +157,8 @@ export const AuthProvider = ({ children }) => {
       loading, 
       login, 
       logout, 
-      setUser // Expose setUser to components
+      register,
+      setUser
     }}>
       {!loading && children}
     </AuthContext.Provider>

@@ -23,13 +23,21 @@ export default function DashboardPage() {
     console.log('Dashboard: Auth state changed', { user, authLoading });
     if (!authLoading && !user) {
       console.log('Dashboard: No user found, redirecting to login');
-      router.push('/login?from=/dashboard');
+      router.replace('/login?from=/dashboard');
     }
   }, [user, authLoading, router]);
 
   // Fetch tasks from the API
   const fetchTasks = async () => {
+    if (!user) {
+      console.log('Dashboard: No user available, skipping task fetch');
+      return;
+    }
+
     try {
+      setLoading(true);
+      console.log('Dashboard: Fetching tasks for user:', user.email);
+      
       const response = await fetch('/api/tasks', {
         credentials: 'include',
         headers: {
@@ -38,75 +46,85 @@ export default function DashboardPage() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch tasks');
+        if (response.status === 401) {
+          console.log('Dashboard: Unauthorized, redirecting to login');
+          router.replace('/login?from=/dashboard');
+          return;
+        }
+        throw new Error(`Failed to fetch tasks: ${response.status}`);
       }
       
       const data = await response.json();
-      setTasks(Array.isArray(data) ? data : []);
+      console.log('Dashboard: Tasks fetched:', data.length || 0, 'tasks');
+      
+      const taskList = Array.isArray(data) ? data : [];
+      setTasks(taskList);
       
       // Extract unique categories
-      const categorySet = new Set();
-      data.forEach(task => {
-        if (task.category) {
-          categorySet.add(task.category);
+      const categorySet = new Set(['Work', 'Personal', 'Shopping', 'Health', 'Other']);
+      taskList.forEach(task => {
+        if (task.category && task.category.trim()) {
+          categorySet.add(task.category.trim());
         }
       });
       setCategories(Array.from(categorySet));
       
     } catch (error) {
-      console.error('Error fetching tasks:', error);
+      console.error('Dashboard: Error fetching tasks:', error);
+      toast.error('Failed to fetch tasks. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch tasks on component mount
+  // Fetch tasks when user is available
   useEffect(() => {
-    if (user) {
+    if (user && !authLoading) {
       fetchTasks();
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   // Handle task creation/update
   const handleTaskSubmit = async (taskData) => {
-  try {
-    const url = editingTask
-      ? `/api/tasks/${editingTask.id}`
-      : '/api/tasks';
-    const method = editingTask ? 'PUT' : 'POST';
+    try {
+      const url = editingTask
+        ? `/api/tasks/${editingTask.id || editingTask._id}`
+        : '/api/tasks';
+      const method = editingTask ? 'PUT' : 'POST';
 
-    const response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(taskData),
-    });
+      console.log('Dashboard: Submitting task', { method, url, taskData });
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Failed to save task');
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(taskData),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || `Failed to ${editingTask ? 'update' : 'create'} task`);
+      }
+
+      await fetchTasks();
+      setIsModalOpen(false);
+      setEditingTask(null);
+
+      toast.success(editingTask ? 'Task updated successfully!' : 'Task created successfully!');
+    } catch (error) {
+      console.error('Dashboard: Error saving task:', error);
+      toast.error(error.message || 'Something went wrong');
     }
-
-    await fetchTasks();
-    setIsModalOpen(false);
-    setEditingTask(null);
-
-    // ✅ Success toast
-    toast.success(editingTask ? 'Task updated successfully!' : 'Task created successfully!');
-  } catch (error) {
-    console.error('Error saving task:', error);
-
-    // ❌ Error toast
-    toast.error(error.message || 'Something went wrong');
-  }
-};
+  };
 
   const handleEditTask = (task) => {
+    console.log('Dashboard: Editing task:', task);
     setEditingTask(task);
     setIsModalOpen(true);
   };
 
   const handleCreateNewTask = () => {
+    console.log('Dashboard: Creating new task');
     setEditingTask(null);
     setIsModalOpen(true);
   };
@@ -118,27 +136,36 @@ export default function DashboardPage() {
     }
     
     try {
+      console.log('Dashboard: Deleting task:', taskId);
+      
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete task');
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to delete task');
       }
 
       await fetchTasks();
+      toast.success('Task deleted successfully!');
     } catch (error) {
-      console.error('Error deleting task:', error);
-      alert('Failed to delete task. Please try again.');
+      console.error('Dashboard: Error deleting task:', error);
+      toast.error(error.message || 'Failed to delete task. Please try again.');
     }
   };
 
   // Toggle task completion status
   const handleToggleComplete = async (taskId, newStatus) => {
     try {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) return;
+      const task = tasks.find(t => (t.id || t._id) === taskId);
+      if (!task) {
+        console.error('Dashboard: Task not found for toggle:', taskId);
+        return;
+      }
+
+      console.log('Dashboard: Toggling task status:', taskId, newStatus);
 
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
@@ -149,24 +176,42 @@ export default function DashboardPage() {
         body: JSON.stringify({
           ...task,
           status: newStatus,
+          completedAt: newStatus === 'completed' ? new Date() : null
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update task status');
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to update task status');
       }
 
       await fetchTasks();
+      toast.success(`Task marked as ${newStatus}!`);
     } catch (error) {
-      console.error('Error toggling task status:', error);
-      alert('Failed to update task status. Please try again.');
+      console.error('Dashboard: Error toggling task status:', error);
+      toast.error(error.message || 'Failed to update task status. Please try again.');
     }
   };
 
-  if (loading) {
+  // Show loading while checking auth or fetching initial data
+  if (authLoading || (loading && !tasks.length)) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <p className="text-gray-600">Redirecting to login...</p>
+        </div>
       </div>
     );
   }
@@ -176,7 +221,10 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 sm:px-0">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-semibold text-gray-900">Dashboard</h2>
+            <div>
+              <h2 className="text-2xl font-semibold text-gray-900">Dashboard</h2>
+              <p className="text-gray-600 mt-1">Welcome back, {user.name || user.email}!</p>
+            </div>
             <button
               type="button"
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

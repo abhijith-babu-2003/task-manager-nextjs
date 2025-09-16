@@ -7,12 +7,14 @@ const geistSans = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-geist-sans',
+  preload: false,
 });
 
 const geistMono = JetBrains_Mono({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-geist-mono',
+  preload: false,
 });
 
 export const metadata = {
@@ -22,7 +24,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         <Providers>
           <AuthProvider>

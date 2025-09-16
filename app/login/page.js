@@ -14,23 +14,17 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("from") || "/dashboard";
-  const { user, login } = useAuth();
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { user, login, loading: authLoading } = useAuth();
 
-  // Redirect if already logged in or after successful login
+  // Redirect if already logged in
   useEffect(() => {
-    console.log('Login page - User state changed:', { user, loading });
+    console.log('Login page - Auth state:', { user, authLoading });
     
-    if (user && !loading) {
+    if (!authLoading && user) {
       console.log('Login page - User is authenticated, redirecting to:', redirectTo);
-      // Use replace to prevent going back to login page
-      const timer = setTimeout(() => {
-        router.replace(redirectTo);
-      }, 100);
-      
-      return () => clearTimeout(timer);
+      router.replace(redirectTo);
     }
-  }, [user, loading, router, redirectTo]);
+  }, [user, authLoading, router, redirectTo]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -59,7 +53,6 @@ export default function LoginPage() {
 
     setLoading(true);
     console.log('Attempting login with email:', email);
-    console.log('Redirect target after login:', redirectTo);
     
     try {
       const result = await login(email, password);
@@ -67,21 +60,45 @@ export default function LoginPage() {
       
       if (result.success) {
         console.log('Login successful, showing success message');
-        toast.success("Login successful!");
+        toast.success("Login successful! Welcome back!");
         
-        // The AuthContext's useEffect will handle the redirection
-        // when the user state is updated
+        // Small delay to show the success message, then redirect
+        setTimeout(() => {
+          router.replace(redirectTo);
+        }, 1000);
       } else {
         console.error('Login failed:', result.error);
-        throw new Error(result.error || "Login failed");
+        const errorMessage = result.error || "Login failed";
+        toast.error(errorMessage);
+        setErrors({ general: errorMessage });
       }
     } catch (err) {
       console.error('Login error:', err);
-      toast.error(err.message || "Login failed. Please try again.");
+      const errorMessage = err.message || "Login failed. Please try again.";
+      toast.error(errorMessage);
+      setErrors({ general: errorMessage });
     } finally {
       setLoading(false);
     }
   };
+
+  // Show loading while checking auth status
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Don't render if user is already logged in
+  if (user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4 sm:px-6 lg:px-8">
@@ -90,8 +107,13 @@ export default function LoginPage() {
           Sign in to your account
         </h1>
 
+        {errors.general && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {errors.general}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Email */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Email
@@ -104,13 +126,13 @@ export default function LoginPage() {
                 errors.email ? "border-red-500" : "border-gray-300"
               }`}
               placeholder="Enter your email"
+              disabled={loading}
             />
             {errors.email && (
               <p className="text-sm text-red-600 mt-1">{errors.email}</p>
             )}
           </div>
 
-          {/* Password */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Password
@@ -123,13 +145,13 @@ export default function LoginPage() {
                 errors.password ? "border-red-500" : "border-gray-300"
               }`}
               placeholder="Enter your password"
+              disabled={loading}
             />
             {errors.password && (
               <p className="text-sm text-red-600 mt-1">{errors.password}</p>
             )}
           </div>
 
-          {/* Submit button */}
           <button
             type="submit"
             disabled={loading}
@@ -142,7 +164,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          Don’t have an account?{" "}
+          Don't have an account?{" "}
           <Link
             href="/register"
             className="font-medium text-black hover:underline"

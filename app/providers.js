@@ -14,10 +14,10 @@ export function Providers({ children }) {
             color: '#fff',
           },
           success: {
-            duration: 3000,
+            duration: 2000,
           },
           error: {
-            duration: 5000,
+            duration: 4000,
           },
         }}
       />
