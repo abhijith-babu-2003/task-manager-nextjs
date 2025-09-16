@@ -26,23 +26,10 @@ const nextConfig = {
   },
 
   experimental: {
-    serverActions: {}   // ✅ must be object, not boolean
+    serverActions: {}
   },
 
   serverExternalPackages: ['bcryptjs'],
-
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        fs: false,
-        net: false,
-        tls: false,
-        child_process: false,
-        dns: false,
-      };
-    }
-    return config;
-  },
 
   env: {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,

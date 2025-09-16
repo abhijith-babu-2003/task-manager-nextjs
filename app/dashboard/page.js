@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { PlusIcon } from '@heroicons/react/24/outline';
-import DashboardStats from '@/components/DashboardStats';
-import TaskList from '@/components/TaskList';
-import TaskModal from '@/components/TaskModal';
-import { useAuth } from '@/contexts/AuthContext';
-import toast from 'react-hot-toast';
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { PlusIcon } from "@heroicons/react/24/outline";
+import DashboardStats from "@/components/DashboardStats";
+import TaskList from "@/components/TaskList";
+import TaskModal from "@/components/TaskModal";
+import { useAuth } from "@/contexts/AuthContext";
+import toast from "react-hot-toast";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -16,180 +16,177 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [categories, setCategories] = useState(['Work', 'Personal', 'Shopping', 'Health', 'Other']);
+  const [categories, setCategories] = useState(["Work", "Personal", "Shopping", "Health", "Other"]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    console.log('Dashboard: Auth state changed', { user, authLoading });
+    console.log("Dashboard: Auth state changed", { user, authLoading });
     if (!authLoading && !user) {
-      console.log('Dashboard: No user found, redirecting to login');
-      router.replace('/login?from=/dashboard');
+      console.log("Dashboard: No user found, redirecting to login");
+      router.replace("/login?from=/dashboard");
     }
   }, [user, authLoading, router]);
 
   // Fetch tasks from the API
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     if (!user) {
-      console.log('Dashboard: No user available, skipping task fetch');
+      console.log("Dashboard: No user available, skipping task fetch");
       return;
     }
 
     try {
       setLoading(true);
-      console.log('Dashboard: Fetching tasks for user:', user.email);
-      
-      const response = await fetch('/api/tasks', {
-        credentials: 'include',
+      console.log("Dashboard: Fetching tasks for user:", user.email);
+
+      const response = await fetch("/api/tasks", {
+        credentials: "include",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
-      
+
       if (!response.ok) {
         if (response.status === 401) {
-          console.log('Dashboard: Unauthorized, redirecting to login');
-          router.replace('/login?from=/dashboard');
+          console.log("Dashboard: Unauthorized, redirecting to login");
+          router.replace("/login?from=/dashboard");
           return;
         }
         throw new Error(`Failed to fetch tasks: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      console.log('Dashboard: Tasks fetched:', data.length || 0, 'tasks');
-      
+      console.log("Dashboard: Tasks fetched:", data.length || 0, "tasks");
+
       const taskList = Array.isArray(data) ? data : [];
       setTasks(taskList);
-      
+
       // Extract unique categories
-      const categorySet = new Set(['Work', 'Personal', 'Shopping', 'Health', 'Other']);
-      taskList.forEach(task => {
+      const categorySet = new Set(["Work", "Personal", "Shopping", "Health", "Other"]);
+      taskList.forEach((task) => {
         if (task.category && task.category.trim()) {
           categorySet.add(task.category.trim());
         }
       });
       setCategories(Array.from(categorySet));
-      
     } catch (error) {
-      console.error('Dashboard: Error fetching tasks:', error);
-      toast.error('Failed to fetch tasks. Please try refreshing the page.');
+      console.error("Dashboard: Error fetching tasks:", error);
+      toast.error("Failed to fetch tasks. Please try refreshing the page.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, router]);
 
   // Fetch tasks when user is available
   useEffect(() => {
     if (user && !authLoading) {
       fetchTasks();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, fetchTasks]);
 
   // Handle task creation/update
   const handleTaskSubmit = async (taskData) => {
     try {
-      const url = editingTask
-        ? `/api/tasks/${editingTask.id || editingTask._id}`
-        : '/api/tasks';
-      const method = editingTask ? 'PUT' : 'POST';
+      const url = editingTask ? `/api/tasks/${editingTask.id || editingTask._id}` : "/api/tasks";
+      const method = editingTask ? "PUT" : "POST";
 
-      console.log('Dashboard: Submitting task', { method, url, taskData });
+      console.log("Dashboard: Submitting task", { method, url, taskData });
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(taskData),
       });
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || `Failed to ${editingTask ? 'update' : 'create'} task`);
+        throw new Error(err.error || `Failed to ${editingTask ? "update" : "create"} task`);
       }
 
       await fetchTasks();
       setIsModalOpen(false);
       setEditingTask(null);
 
-      toast.success(editingTask ? 'Task updated successfully!' : 'Task created successfully!');
+      toast.success(editingTask ? "Task updated successfully!" : "Task created successfully!");
     } catch (error) {
-      console.error('Dashboard: Error saving task:', error);
-      toast.error(error.message || 'Something went wrong');
+      console.error("Dashboard: Error saving task:", error);
+      toast.error(error.message || "Something went wrong");
     }
   };
 
   const handleEditTask = (task) => {
-    console.log('Dashboard: Editing task:', task);
+    console.log("Dashboard: Editing task:", task);
     setEditingTask(task);
     setIsModalOpen(true);
   };
 
   const handleCreateNewTask = () => {
-    console.log('Dashboard: Creating new task');
+    console.log("Dashboard: Creating new task");
     setEditingTask(null);
     setIsModalOpen(true);
   };
 
   // Handle task deletion
   const handleDeleteTask = async (taskId) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) {
+    if (!window.confirm("Are you sure you want to delete this task?")) {
       return;
     }
-    
+
     try {
-      console.log('Dashboard: Deleting task:', taskId);
-      
+      console.log("Dashboard: Deleting task:", taskId);
+
       const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'DELETE',
-        credentials: 'include',
+        method: "DELETE",
+        credentials: "include",
       });
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to delete task');
+        throw new Error(err.error || "Failed to delete task");
       }
 
       await fetchTasks();
-      toast.success('Task deleted successfully!');
+      toast.success("Task deleted successfully!");
     } catch (error) {
-      console.error('Dashboard: Error deleting task:', error);
-      toast.error(error.message || 'Failed to delete task. Please try again.');
+      console.error("Dashboard: Error deleting task:", error);
+      toast.error(error.message || "Failed to delete task. Please try again.");
     }
   };
 
   // Toggle task completion status
   const handleToggleComplete = async (taskId, newStatus) => {
     try {
-      const task = tasks.find(t => (t.id || t._id) === taskId);
+      const task = tasks.find((t) => (t.id || t._id) === taskId);
       if (!task) {
-        console.error('Dashboard: Task not found for toggle:', taskId);
+        console.error("Dashboard: Task not found for toggle:", taskId);
         return;
       }
 
-      console.log('Dashboard: Toggling task status:', taskId, newStatus);
+      console.log("Dashboard: Toggling task status:", taskId, newStatus);
 
       const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        credentials: 'include',
+        credentials: "include",
         body: JSON.stringify({
           ...task,
           status: newStatus,
-          completedAt: newStatus === 'completed' ? new Date() : null
+          completedAt: newStatus === "completed" ? new Date() : null,
         }),
       });
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to update task status');
+        throw new Error(err.error || "Failed to update task status");
       }
 
       await fetchTasks();
       toast.success(`Task marked as ${newStatus}!`);
     } catch (error) {
-      console.error('Dashboard: Error toggling task status:', error);
-      toast.error(error.message || 'Failed to update task status. Please try again.');
+      console.error("Dashboard: Error toggling task status:", error);
+      toast.error(error.message || "Failed to update task status. Please try again.");
     }
   };
 
@@ -238,11 +235,11 @@ export default function DashboardPage() {
           <div className="mb-8">
             <DashboardStats tasks={tasks} />
           </div>
-          
+
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <TaskList 
-              tasks={tasks} 
-              loading={loading} 
+            <TaskList
+              tasks={tasks}
+              loading={loading}
               onEdit={handleEditTask}
               onDelete={handleDeleteTask}
               onToggleComplete={handleToggleComplete}

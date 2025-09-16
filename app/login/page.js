@@ -18,10 +18,10 @@ export default function LoginPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    console.log('Login page - Auth state:', { user, authLoading });
-    
+    console.log("Login page - Auth state:", { user, authLoading });
+
     if (!authLoading && user) {
-      console.log('Login page - User is authenticated, redirecting to:', redirectTo);
+      console.log("Login page - User is authenticated, redirecting to:", redirectTo);
       router.replace(redirectTo);
     }
   }, [user, authLoading, router, redirectTo]);
@@ -52,28 +52,28 @@ export default function LoginPage() {
     }
 
     setLoading(true);
-    console.log('Attempting login with email:', email);
-    
+    console.log("Attempting login with email:", email);
+
     try {
       const result = await login(email, password);
-      console.log('Login result:', result);
-      
+      console.log("Login result:", result);
+
       if (result.success) {
-        console.log('Login successful, showing success message');
+        console.log("Login successful, showing success message");
         toast.success("Login successful! Welcome back!");
-        
+
         // Small delay to show the success message, then redirect
         setTimeout(() => {
           router.replace(redirectTo);
         }, 1000);
       } else {
-        console.error('Login failed:', result.error);
+        console.error("Login failed:", result.error);
         const errorMessage = result.error || "Login failed";
         toast.error(errorMessage);
         setErrors({ general: errorMessage });
       }
     } catch (err) {
-      console.error('Login error:', err);
+      console.error("Login error:", err);
       const errorMessage = err.message || "Login failed. Please try again.";
       toast.error(errorMessage);
       setErrors({ general: errorMessage });
@@ -164,7 +164,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link
             href="/register"
             className="font-medium text-black hover:underline"
