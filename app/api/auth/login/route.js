@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import User from '@/models/User';
 import { createToken, setAuthToken } from '@/lib/auth-utils';
+import dbConnect from '@/lib/mongodb';
 
 export async function POST(request) {
   try {
+    await dbConnect(); // Ensure Mongoose connection
+
     const { email, password } = await request.json();
     
     if (!email || !password) {
@@ -13,21 +16,16 @@ export async function POST(request) {
       );
     }
 
-
-  
     const user = await User.findByEmail(email.toLowerCase());
     
     if (!user) {
- 
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       );
     }
 
- 
     const isPasswordValid = await User.comparePassword(email, password);
-  
     
     if (!isPasswordValid) {
       return NextResponse.json(
@@ -37,10 +35,8 @@ export async function POST(request) {
     }
     
     try {
-     
       const token = createToken(user);
     
- 
       const userData = {
         id: user._id.toString(),
         email: user.email,
@@ -65,10 +61,8 @@ export async function POST(request) {
         }
       );
 
-   
       setAuthToken(response, token);
       
-  
       response.headers.set('X-Content-Type-Options', 'nosniff');
       response.headers.set('X-Frame-Options', 'DENY');
       response.headers.set('X-XSS-Protection', '1; mode=block');

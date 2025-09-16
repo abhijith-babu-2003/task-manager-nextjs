@@ -122,9 +122,8 @@ export const AuthProvider = ({ children }) => {
       const data = await res.json();
       console.log('AuthContext: Registration response:', { status: res.status, data });
       
-      if (res.ok && data.user) {
+      if (res.ok && data.success && data.user) { // Fixed: Check data.success
         console.log('AuthContext: Registration successful, setting user:', data.user);
-        // Set user but don't redirect automatically
         setUser(data.user);
         
         return { 

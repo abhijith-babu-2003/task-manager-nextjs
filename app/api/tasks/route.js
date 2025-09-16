@@ -1,19 +1,7 @@
 import { NextResponse } from 'next/server';
-import { initDB } from '@/lib/db';
+import dbConnect from '@/lib/mongodb';
 import Task from '@/models/Task';
 import { verifyToken } from '@/lib/auth-utils';
-
-// Helper function to set CORS headers
-function withCors(response, request) {
-  const origin = request.headers.get('origin') || '*';
-  
-  response.headers.set('Access-Control-Allow-Origin', origin);
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-id, x-user-email');
-  response.headers.set('Access-Control-Allow-Credentials', 'true');
-  
-  return response;
-}
 
 // Helper function to get authenticated user
 async function getAuthenticatedUser(request) {
@@ -51,26 +39,25 @@ async function getAuthenticatedUser(request) {
   }
 }
 
-// Handle preflight requests
+// Handle preflight requests (middleware covers)
 export async function OPTIONS(request) {
   const response = new NextResponse(null, { status: 200 });
-  return withCors(response, request);
+  return response;
 }
 
 // Get all tasks for the current user
 export async function GET(request) {
   try {
-    await initDB();
+    await dbConnect();
     
     const user = await getAuthenticatedUser(request);
     
     if (!user) {
       console.log('No authenticated user found in GET request');
-      const response = NextResponse.json(
+      return NextResponse.json(
         { error: 'Unauthorized - Authentication required' }, 
         { status: 401 }
       );
-      return withCors(response, request);
     }
     
     console.log('Fetching tasks for user:', user.email || 'unknown');
@@ -83,7 +70,7 @@ export async function GET(request) {
       search: searchParams.get('search')
     };
 
-    // Get tasks with filters using the Task model
+    // Get tasks with filters using the Task model (already lean() in static)
     const tasks = await Task.findByUser(user.id, filters);
     
     // Transform tasks to include proper ID field and ensure consistency
@@ -104,18 +91,16 @@ export async function GET(request) {
       userId: task.userId.toString()
     }));
 
-    const response = NextResponse.json(transformedTasks);
-    return withCors(response, request);
+    return NextResponse.json(transformedTasks);
   } catch (error) {
     console.error('Error in GET /api/tasks:', error);
-    const response = NextResponse.json(
+    return NextResponse.json(
       { 
         error: 'Failed to fetch tasks',
         details: error.message 
       },
       { status: 500 }
     );
-    return withCors(response, request);
   }
 }
 
@@ -123,18 +108,17 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     console.log('POST /api/tasks - Request received');
-    await initDB();
+    await dbConnect();
     
     const user = await getAuthenticatedUser(request);
     if (!user) {
       console.log('POST /api/tasks - Unauthorized: No user found');
-      const response = NextResponse.json(
+      return NextResponse.json(
         { 
           error: 'Unauthorized - Authentication required'
         },
         { status: 401 }
       );
-      return withCors(response, request);
     }
 
     const taskData = await request.json();
@@ -143,13 +127,12 @@ export async function POST(request) {
     // Validate required fields
     if (!taskData.title || !taskData.title.trim()) {
       console.log('POST /api/tasks - Validation error: Title is required');
-      const response = NextResponse.json(
+      return NextResponse.json(
         { 
           error: 'Title is required'
         },
         { status: 400 }
       );
-      return withCors(response, request);
     }
 
     // Create new task using the Task model
@@ -187,32 +170,28 @@ export async function POST(request) {
 
     console.log(`POST /api/tasks - Task created with ID: ${newTask._id}`);
     
-    const response = NextResponse.json(responseTask, { status: 201 });
-    
-    return withCors(response, request);
+    return NextResponse.json(responseTask, { status: 201 });
   } catch (error) {
     console.error('Error in POST /api/tasks:', error);
     
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
-      const response = NextResponse.json(
+      return NextResponse.json(
         { 
           error: 'Validation failed',
           details: validationErrors
         },
         { status: 400 }
       );
-      return withCors(response, request);
     }
     
-    const response = NextResponse.json(
+    return NextResponse.json(
       { 
         error: 'Failed to create task',
         details: error.message 
       },
       { status: 500 }
     );
-    return withCors(response, request);
   }
 }

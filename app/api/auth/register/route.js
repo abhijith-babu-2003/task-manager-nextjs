@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import User from '@/models/User';
 import { createToken, setAuthToken } from '@/lib/auth-utils';
-import { initDB } from '@/lib/db';
+import dbConnect from '@/lib/mongodb';
 
 export async function POST(request) {
   try {
-    await initDB();
+    await dbConnect(); // Ensure connection
     
     const { name, email, password } = await request.json();
     

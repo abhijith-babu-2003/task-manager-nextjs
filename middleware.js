@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from './lib/auth-utils';
-import { initDB } from '@/lib/db';
-import User from '@/models/User'; // This was missing!
+import dbConnect from '@/lib/mongodb';
+import User from '@/models/User'; 
 
 // List of paths that should be accessible without authentication
 const publicPaths = [
   '/login',
   '/register',
   '/api/auth/login',
-  '/api/auth/register'
+  '/api/auth/register',
+  '/api/auth/me', // Allow for initial auth checks
+  '/api/auth/logout'
 ];
 
 export async function middleware(request) {
   try {
-    await initDB();
+    await dbConnect(); // Ensure connection for User queries
   } catch (error) {
     console.error('Database initialization failed:', error);
   }
@@ -88,7 +90,7 @@ export async function middleware(request) {
       }
 
       // Check if user exists in database
-      const user = await User.findById(decoded.id);
+      const user = await User.findById(decoded.id).select('-password');
       if (!user) {
         console.log('User not found for ID:', decoded.id);
         throw new Error('User not found');
@@ -137,7 +139,7 @@ export async function middleware(request) {
     }
 
     // Check if user exists
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select('-password');
     if (!user) {
       throw new Error('User not found');
     }

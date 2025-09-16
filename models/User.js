@@ -1,3 +1,4 @@
+// models/User.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -60,24 +61,24 @@ userSchema.statics.findByEmail = async function(email) {
   try {
     if (!email) return null;
     const normalizedEmail = email.toLowerCase().trim();
-    return await this.findOne({ email: normalizedEmail });
+    return await this.findOne({ email: normalizedEmail }).lean();
   } catch (error) {
     console.error('Error in findByEmail:', error);
     return null;
   }
 };
 
-// Static method to find user by ID
-userSchema.statics.findById = async function(id) {
+// Static method to find user by ID (renamed to avoid conflict)
+userSchema.statics.findUserById = async function(id) {
   try {
     if (!id) return null;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       console.error('Invalid ObjectId:', id);
       return null;
     }
-    return await this.findOne({ _id: id });
+    return await this.findById(id).select('-password').lean(); // Use Mongoose's built-in findById
   } catch (error) {
-    console.error('Error in findById:', error);
+    console.error('Error in findUserById:', error);
     return null;
   }
 };
@@ -100,13 +101,13 @@ userSchema.statics.updateUser = async function(id, updateData) {
       id,
       { $set: update },
       { new: true, runValidators: true }
-    );
+    ).lean();
     
     if (!user) {
       throw new Error('User not found');
     }
     
-    return user.toObject();
+    return user;
   } catch (error) {
     console.error('Error in updateUser:', error);
     throw error;

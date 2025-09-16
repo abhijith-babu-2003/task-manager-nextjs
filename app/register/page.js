@@ -62,7 +62,7 @@ export default function RegisterPage() {
         
         // Small delay to show the success message, then redirect
         setTimeout(() => {
-          router.replace('/login');
+          router.replace('/dashboard');
         }, 1000);
       } else {
         console.error('Registration failed:', result.error);

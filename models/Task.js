@@ -108,7 +108,7 @@ taskSchema.methods.markIncomplete = function() {
 
 // Static methods
 taskSchema.statics.findByUser = async function(userId, filters = {}) {
-  const query = { userId };
+  const query = { userId: new mongoose.Types.ObjectId(userId) };
   
   // Apply filters
   if (filters.status) {
@@ -138,12 +138,12 @@ taskSchema.statics.findByUser = async function(userId, filters = {}) {
     sortOptions.createdAt = -1; // Default sort by newest first
   }
   
-  return this.find(query).sort(sortOptions).lean();
+  return this.find(query).sort(sortOptions).lean(); // Added lean for perf
 };
 
 taskSchema.statics.getTaskStats = async function(userId) {
   const stats = await this.aggregate([
-    { $match: { userId } },
+    { $match: { userId: new mongoose.Types.ObjectId(userId) } },
     {
       $group: {
         _id: '$status',

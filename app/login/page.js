@@ -21,7 +21,7 @@ export default function LoginPage() {
     console.log("Login page - Auth state:", { user, authLoading });
 
     if (!authLoading && user) {
-      console.log("Login page - User is authenticated, redirecting to:", redirectTo);
+
       router.replace(redirectTo);
     }
   }, [user, authLoading, router, redirectTo]);

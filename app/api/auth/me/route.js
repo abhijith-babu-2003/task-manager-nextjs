@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth-utils';
-import { initDB } from '@/lib/db';
+import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 
 export async function GET(request) {
   try {
     // Initialize database connection with error handling
     try {
-      await initDB();
+      await dbConnect();
       console.log('Auth/me: Database initialized successfully');
     } catch (dbError) {
       console.error('Auth/me: Database initialization failed:', dbError.message);
@@ -61,7 +61,7 @@ export async function GET(request) {
     // Find user in database with error handling
     let user;
     try {
-      user = await User.findById(userId);
+      user = await User.findById(userId).select('-password'); // Exclude password
     } catch (userLookupError) {
       console.error('Auth/me: User lookup error:', userLookupError.message);
       return NextResponse.json(
