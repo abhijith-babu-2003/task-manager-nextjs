@@ -18,16 +18,14 @@ export default function DashboardPage() {
   const [editingTask, setEditingTask] = useState(null);
   const [categories, setCategories] = useState(["Work", "Personal", "Shopping", "Health", "Other"]);
 
-  // Redirect to login if not authenticated
+ // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    console.log("Dashboard: Auth state changed", { user, authLoading });
     if (!authLoading && !user) {
-      console.log("Dashboard: No user found, redirecting to login");
       router.replace("/login?from=/dashboard");
     }
   }, [user, authLoading, router]);
 
-  // Fetch tasks from the API
+
   const fetchTasks = useCallback(async () => {
     if (!user) {
       console.log("Dashboard: No user available, skipping task fetch");
@@ -76,14 +74,14 @@ export default function DashboardPage() {
     }
   }, [user, router]);
 
-  // Fetch tasks when user is available
+
   useEffect(() => {
     if (user && !authLoading) {
       fetchTasks();
     }
   }, [user, authLoading, fetchTasks]);
 
-  // Handle task creation/update
+ 
   const handleTaskSubmit = async (taskData) => {
     try {
       const url = editingTask ? `/api/tasks/${editingTask.id || editingTask._id}` : "/api/tasks";

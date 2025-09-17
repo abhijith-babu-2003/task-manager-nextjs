@@ -5,7 +5,7 @@ import dbConnect from '@/lib/mongodb';
 
 export async function POST(request) {
   try {
-    await dbConnect(); // Ensure Mongoose connection
+    await dbConnect(); 
 
     const { email, password } = await request.json();
     
