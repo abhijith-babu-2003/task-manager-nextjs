@@ -15,7 +15,7 @@ export default function TaskList({ tasks = [], onEdit, onDelete, onToggleComplet
 
   const categories = ['all', ...new Set(tasks.map(task => task.category).filter(Boolean))];
 
-  // Apply filters + sorting
+ 
   useEffect(() => {
     let result = [...tasks];
 

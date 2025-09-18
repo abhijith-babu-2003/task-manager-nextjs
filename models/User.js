@@ -1,4 +1,4 @@
-// models/User.js
+
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Hash password before saving
+
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
@@ -32,12 +32,12 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Method to compare password
+
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Static method to create user
+
 userSchema.statics.createUser = async function(userData) {
   try {
     const user = new this({
@@ -56,7 +56,7 @@ userSchema.statics.createUser = async function(userData) {
   }
 };
 
-// Static method to find user by email
+
 userSchema.statics.findByEmail = async function(email) {
   try {
     if (!email) return null;
@@ -68,7 +68,7 @@ userSchema.statics.findByEmail = async function(email) {
   }
 };
 
-// Static method to find user by ID (renamed to avoid conflict)
+
 userSchema.statics.findUserById = async function(id) {
   try {
     if (!id) return null;
@@ -76,14 +76,14 @@ userSchema.statics.findUserById = async function(id) {
       console.error('Invalid ObjectId:', id);
       return null;
     }
-    return await this.findById(id).select('-password').lean(); // Use Mongoose's built-in findById
+    return await this.findById(id).select('-password').lean(); 
   } catch (error) {
     console.error('Error in findUserById:', error);
     return null;
   }
 };
 
-// Static method to update user
+
 userSchema.statics.updateUser = async function(id, updateData) {
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -114,7 +114,7 @@ userSchema.statics.updateUser = async function(id, updateData) {
   }
 };
 
-// Static method to compare password
+
 userSchema.statics.comparePassword = async function(email, candidatePassword) {
   try {
     const user = await this.findOne({ email: email.toLowerCase().trim() }).select('+password');

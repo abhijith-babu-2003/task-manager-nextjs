@@ -15,7 +15,6 @@ export default function RegisterPage() {
   const router = useRouter();
   const { user, register } = useAuth();
 
-  // Redirect if already logged in
   useEffect(() => {
     if (user) {
       console.log('Register page: User already authenticated, redirecting to dashboard');
@@ -60,7 +59,7 @@ export default function RegisterPage() {
         console.log('Registration successful:', result);
         toast.success('Account created successfully! Welcome!');
         
-        // Small delay to show the success message, then redirect
+       
         setTimeout(() => {
           router.replace('/dashboard');
         }, 1000);
@@ -79,7 +78,7 @@ export default function RegisterPage() {
     }
   };
 
-  // Don't render if user is already logged in
+ 
   if (user) {
     return (
       <div className="min-h-screen flex items-center justify-center">

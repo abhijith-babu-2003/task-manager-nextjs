@@ -1,16 +1,16 @@
 // app/api/tasks/[id]/route.js
 import { NextResponse } from 'next/server';
-import Task from '@/models/Task'; // Use model
+import Task from '@/models/Task'; 
 import dbConnect from '@/lib/mongodb';
 import { verifyToken } from '@/lib/auth-utils';
-import mongoose from 'mongoose'; // For ObjectId
+import mongoose from 'mongoose'; 
 
 const { Types: { ObjectId } } = mongoose;
 
-// Helper function to get authenticated user
+
 async function getAuthenticatedUser(request) {
   try {
-    // First try to get user from middleware headers
+   
     const userId = request.headers.get('x-user-id');
     const userEmail = request.headers.get('x-user-email');
 
@@ -18,7 +18,7 @@ async function getAuthenticatedUser(request) {
       return { id: userId, email: userEmail };
     }
 
-    // Fallback to token verification
+  
     const token = request.cookies.get('auth-token')?.value;
 
     if (!token) {
@@ -40,12 +40,11 @@ async function getAuthenticatedUser(request) {
   }
 }
 
-// Handle preflight requests (middleware covers, but keep for safety)
 export async function OPTIONS() {
   return new NextResponse(null, { status: 200 });
 }
 
-// Get single task
+
 export async function GET(request, { params }) {
   try {
     await dbConnect();

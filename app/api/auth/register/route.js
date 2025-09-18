@@ -5,11 +5,11 @@ import dbConnect from '@/lib/mongodb';
 
 export async function POST(request) {
   try {
-    await dbConnect(); // Ensure connection
+    await dbConnect(); 
     
     const { name, email, password } = await request.json();
     
-    // Validate input
+    
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: 'Name, email, and password are required' },
@@ -24,7 +24,7 @@ export async function POST(request) {
       );
     }
 
-    // Check if user already exists
+   
     const existingUser = await User.findByEmail(email.toLowerCase());
     if (existingUser) {
       return NextResponse.json(
@@ -33,7 +33,7 @@ export async function POST(request) {
       );
     }
 
-    // Create user (password hashing is handled in the User model)
+    
     const newUser = new User({
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -42,10 +42,10 @@ export async function POST(request) {
 
     await newUser.save();
     
-    // Create JWT token and log the user in automatically
+    
     const token = createToken(newUser);
     
-    // Prepare user data (without password)
+
     const userData = {
       id: newUser._id.toString(),
       name: newUser.name,
@@ -53,7 +53,7 @@ export async function POST(request) {
       role: newUser.role || 'user'
     };
     
-    // Create response
+    
     const response = NextResponse.json(
       { 
         success: true,
@@ -63,16 +63,15 @@ export async function POST(request) {
       { status: 201 }
     );
 
-    // Set auth cookie
+  
     setAuthToken(response, token);
     
-    console.log('Registration successful for user:', newUser.email);
     
     return response;
   } catch (error) {
     console.error('Registration error:', error);
     
-    // Handle specific MongoDB errors
+
     if (error.code === 11000) {
       return NextResponse.json(
         { error: 'User with this email already exists' },

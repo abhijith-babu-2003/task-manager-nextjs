@@ -58,7 +58,7 @@ export default function DashboardPage() {
       const taskList = Array.isArray(data) ? data : [];
       setTasks(taskList);
 
-      // Extract unique categories
+   
       const categorySet = new Set(["Work", "Personal", "Shopping", "Health", "Other"]);
       taskList.forEach((task) => {
         if (task.category && task.category.trim()) {
@@ -124,7 +124,7 @@ export default function DashboardPage() {
     setIsModalOpen(true);
   };
 
-  // Handle task deletion
+
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm("Are you sure you want to delete this task?")) {
       return;
@@ -151,7 +151,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Toggle task completion status
+
   const handleToggleComplete = async (taskId, newStatus) => {
     try {
       const task = tasks.find((t) => (t.id || t._id) === taskId);
@@ -188,7 +188,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Show loading while checking auth or fetching initial data
+
   if (authLoading || (loading && !tasks.length)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -200,7 +200,7 @@ export default function DashboardPage() {
     );
   }
 
-  // Don't render if not authenticated
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">

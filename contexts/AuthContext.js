@@ -100,7 +100,7 @@ export const AuthProvider = ({ children }) => {
       router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
-      // Still clear user state even if request fails
+   
       setUser(null);
       router.push('/login');
     }
@@ -122,7 +122,7 @@ export const AuthProvider = ({ children }) => {
       const data = await res.json();
       console.log('AuthContext: Registration response:', { status: res.status, data });
       
-      if (res.ok && data.success && data.user) { // Fixed: Check data.success
+      if (res.ok && data.success && data.user) { 
         console.log('AuthContext: Registration successful, setting user:', data.user);
         setUser(data.user);
         
@@ -147,7 +147,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Add debug logging for auth state changes
   console.log('AuthContext: Current user state:', { user, loading });
   
   return (

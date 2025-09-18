@@ -3,19 +3,19 @@ import { verifyToken } from './lib/auth-utils';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User'; 
 
-// List of paths that should be accessible without authentication
+
 const publicPaths = [
   '/login',
   '/register',
   '/api/auth/login',
   '/api/auth/register',
-  '/api/auth/me', // Allow for initial auth checks
+  '/api/auth/me', 
   '/api/auth/logout'
 ];
 
 export async function middleware(request) {
   try {
-    await dbConnect(); // Ensure connection for User queries
+    await dbConnect(); 
   } catch (error) {
     console.error('Database initialization failed:', error);
   }
@@ -24,7 +24,7 @@ export async function middleware(request) {
   const token = request.cookies.get('auth-token')?.value;
   const origin = request.headers.get('origin') || '*';
 
-  // Handle preflight requests
+
   if (request.method === 'OPTIONS') {
     const response = new NextResponse(null, { status: 200 });
     response.headers.set('Access-Control-Allow-Origin', origin);
@@ -35,9 +35,9 @@ export async function middleware(request) {
     return response;
   }
 
-  // Allow public paths
+ 
   if (publicPaths.some(path => pathname.startsWith(path))) {
-    // If user is already logged in and tries to access login/register, redirect to dashboard
+  
     if (token && (pathname === '/login' || pathname === '/register')) {
       try {
         const decoded = await verifyToken(token);
@@ -45,7 +45,7 @@ export async function middleware(request) {
           return NextResponse.redirect(new URL('/dashboard', request.url));
         }
       } catch (error) {
-        // Token invalid, allow access to login/register
+    
         console.log('Invalid token on public path, allowing access');
       }
     }
@@ -56,14 +56,13 @@ export async function middleware(request) {
     return response;
   }
 
-  // Redirect root to login
+
   if (pathname === '/') {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Handle API routes
   if (pathname.startsWith('/api/')) {
-    // Skip auth for public API routes
+   
     if (publicPaths.some(path => pathname.startsWith(path))) {
       const response = NextResponse.next();
       response.headers.set('Access-Control-Allow-Origin', origin);
@@ -71,7 +70,7 @@ export async function middleware(request) {
       return response;
     }
 
-    // Require auth for protected API routes
+    
     if (!token) {
       const response = NextResponse.json(
         { success: false, error: 'Authentication required' },
@@ -89,14 +88,14 @@ export async function middleware(request) {
         throw new Error('Invalid or expired token');
       }
 
-      // Check if user exists in database
+    
       const user = await User.findById(decoded.id).select('-password');
       if (!user) {
         console.log('User not found for ID:', decoded.id);
         throw new Error('User not found');
       }
 
-      // Add user info to request headers
+    
       const requestHeaders = new Headers(request.headers);
       requestHeaders.set('x-user-id', user._id.toString());
       requestHeaders.set('x-user-email', user.email);
@@ -107,7 +106,7 @@ export async function middleware(request) {
         },
       });
       
-      // Set CORS headers
+      
       response.headers.set('Access-Control-Allow-Origin', origin);
       response.headers.set('Access-Control-Allow-Credentials', 'true');
       
@@ -115,7 +114,7 @@ export async function middleware(request) {
     } catch (error) {
       console.error('Token verification failed:', error.message);
       
-      // Clear invalid token and return error
+      
       const response = NextResponse.json(
         { success: false, error: 'Authentication required' },
         { status: 401 }
@@ -127,7 +126,7 @@ export async function middleware(request) {
     }
   }
 
-  // Handle page routes (non-API routes)
+
   if (!token) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
@@ -138,7 +137,7 @@ export async function middleware(request) {
       throw new Error('Invalid token');
     }
 
-    // Check if user exists
+   
     const user = await User.findById(decoded.id).select('-password');
     if (!user) {
       throw new Error('User not found');

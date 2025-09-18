@@ -61,16 +61,16 @@ const taskSchema = new mongoose.Schema({
   }
 });
 
-// Update the updatedAt field before saving
+
 taskSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   
-  // Set completedAt when status changes to completed
+
   if (this.status === 'completed' && !this.completedAt) {
     this.completedAt = new Date();
   }
   
-  // Clear completedAt if status changes from completed
+ 
   if (this.status !== 'completed' && this.completedAt) {
     this.completedAt = undefined;
   }
@@ -78,20 +78,20 @@ taskSchema.pre('save', function(next) {
   next();
 });
 
-// Update the updatedAt field before updating
+
 taskSchema.pre('findOneAndUpdate', function(next) {
   this.set({ updatedAt: new Date() });
   next();
 });
 
-// Create indexes for better performance
+
 taskSchema.index({ userId: 1, createdAt: -1 });
 taskSchema.index({ userId: 1, status: 1 });
 taskSchema.index({ userId: 1, priority: 1 });
 taskSchema.index({ userId: 1, category: 1 });
 taskSchema.index({ userId: 1, dueDate: 1 });
 
-// Instance methods
+
 taskSchema.methods.markComplete = function() {
   this.status = 'completed';
   this.completedAt = new Date();
@@ -106,11 +106,11 @@ taskSchema.methods.markIncomplete = function() {
   return this.save();
 };
 
-// Static methods
+
 taskSchema.statics.findByUser = async function(userId, filters = {}) {
   const query = { userId: new mongoose.Types.ObjectId(userId) };
   
-  // Apply filters
+ 
   if (filters.status) {
     query.status = filters.status;
   }
@@ -130,15 +130,15 @@ taskSchema.statics.findByUser = async function(userId, filters = {}) {
     ];
   }
   
-  // Sorting
+  
   const sortOptions = {};
   if (filters.sortBy) {
     sortOptions[filters.sortBy] = filters.sortOrder === 'desc' ? -1 : 1;
   } else {
-    sortOptions.createdAt = -1; // Default sort by newest first
+    sortOptions.createdAt = -1; 
   }
   
-  return this.find(query).sort(sortOptions).lean(); // Added lean for perf
+  return this.find(query).sort(sortOptions).lean(); 
 };
 
 taskSchema.statics.getTaskStats = async function(userId) {
@@ -161,7 +161,7 @@ taskSchema.statics.getTaskStats = async function(userId) {
     }
   ]);
 
-  // Convert to object with status as keys
+
   return stats.reduce((acc, { status, count, totalTime }) => {
     acc[status] = { count, totalTime };
     return acc;

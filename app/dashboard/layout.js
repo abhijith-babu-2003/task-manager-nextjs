@@ -10,7 +10,6 @@ export default function DashboardLayout({ children }) {
         <main className="py-6 px-4 sm:px-6 lg:px-8">
           {children}
         </main>
-        {/* ✅ Toasts for dashboard actions */}
         <Toaster position="top-center" reverseOrder={false} />
       </div>
     </ProtectedRoute>

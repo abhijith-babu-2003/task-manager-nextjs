@@ -16,7 +16,7 @@ export default function LoginPage() {
   const redirectTo = searchParams.get("from") || "/dashboard";
   const { user, login, loading: authLoading } = useAuth();
 
-  // Redirect if already logged in
+ 
   useEffect(() => {
     console.log("Login page - Auth state:", { user, authLoading });
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
         console.log("Login successful, showing success message");
         toast.success("Login successful! Welcome back!");
 
-        // Small delay to show the success message, then redirect
+      
         setTimeout(() => {
           router.replace(redirectTo);
         }, 1000);
@@ -82,7 +82,6 @@ export default function LoginPage() {
     }
   };
 
-  // Show loading while checking auth status
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -91,7 +90,7 @@ export default function LoginPage() {
     );
   }
 
-  // Don't render if user is already logged in
+  
   if (user) {
     return (
       <div className="min-h-screen flex items-center justify-center">

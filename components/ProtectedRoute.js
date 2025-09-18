@@ -23,7 +23,7 @@ export default function ProtectedRoute({ children }) {
   }
 
   if (!user) {
-    return null; // Will redirect in useEffect
+    return null; 
   }
 
   return children;

@@ -20,7 +20,7 @@ export default function TaskForm({
   });
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
 
-  // Set default categories if none provided
+  
   const defaultCategories = ["Work", "Personal", "Shopping", "Health", "Other"];
   const availableCategories =
     categories.length > 0 ? categories : defaultCategories;
@@ -38,7 +38,7 @@ export default function TaskForm({
         category: task.category || "",
       });
     } else {
-      // Set default due date to today
+     
       const today = new Date();
       const todayFormatted = format(today, "yyyy-MM-dd");
       setFormData((prev) => ({
@@ -53,7 +53,6 @@ export default function TaskForm({
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    // Handle category selection
     if (name === "category" && value === "add-new") {
       setShowNewCategoryInput(true);
       setFormData((prev) => ({
@@ -64,7 +63,7 @@ export default function TaskForm({
       return;
     }
 
-    // Handle other fields
+  
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -89,7 +88,7 @@ export default function TaskForm({
       return;
     }
 
-    // If new category was being added but not saved
+ 
     if (showNewCategoryInput && formData.newCategory.trim()) {
       formData.category = formData.newCategory.trim();
     }

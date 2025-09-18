@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { removeAuthToken } from '@/lib/auth-utils';
-import dbConnect from '@/lib/mongodb'; // Added for consistency
+import dbConnect from '@/lib/mongodb'; 
 
 export async function POST(request) {
   try {
-    await dbConnect(); // Ensure connection (even if not used)
+    await dbConnect(); 
     
     const response = NextResponse.json({ 
       success: true, 
